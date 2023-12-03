@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { inspect } = require("util");
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
@@ -128,20 +129,33 @@ const nextStepsTools = [
 
 async function queryChat(messages, tools) {
   try {
-    const { data } = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-3.5-turbo-1106",
-        messages,
-        temperature: 0.1,
-        tools,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_KEY}`,
+    console.log("Request to OpenAI API with body:", messages);
+    const url = "https://api.openai.com/v1/chat/completions";
+    const postData = {
+      model: "gpt-4-1106-preview",
+      messages,
+      temperature: 0.1,
+      tools,
+    };
+    if (tools == nextStepsTools) {
+      postData.tool_choice = {
+        type: "function",
+        function: {
+          name: "next_steps",
         },
-      }
-    );
+      };
+    }
+    const config = {
+      headers: {
+        Authorization: `Bearer ${OPENAI_KEY}`,
+      },
+    };
+
+    console.log("URL:", url);
+    console.log("Data:", inspect(postData, false, null, true));
+    console.log("Config:", config);
+
+    const { data } = await axios.post(url, postData, config);
 
     return data;
   } catch (err) {
@@ -219,18 +233,30 @@ async function getSuggestedFeedback(history) {
   const toolCall = nextStepsResponse.message.tool_calls[0];
   const json = JSON.parse(toolCall.function.arguments);
   const analysis = json;
-  console.log(analysis.steps);
+  // print only the "steps" property of the analysis
+  console.log("Original analysis:", analysis);
+
+  const steps = [];
+  for (const step of analysis.steps) {
+    console.log("Step:", step.step);
+    steps.push(step.step);
+  }
+  console.log("Suggested feedback:", steps);
+  // return a string in number bullet pointed
+  return steps
+    .map((step, index) => `${index + 1}. ${step}`)
+    .join(" <br> <br> ");
 }
 
 module.exports = getSuggestedFeedback;
 
-const userHistories =  {
-  lposyqon0ceexc6ynetg: [
-    "The user is reading an article from CNN about the arrest of a suspect in the shootings of three homeless men in Los Angeles, as well as a related shooting at a homeless encampment in Las Vegas. The article provides details on the suspect's arrest and the circumstances of the shootings, as well as the response from Los Angeles city officials and law enforcement.",
-    'The user is reading an article about the arrest of a suspect in the shootings of three homeless men in Los Angeles, as well as the subsequent investigation and response by law enforcement and city officials.'
-  ]
-}
+// const userHistories =  {
+//   lposyqon0ceexc6ynetg: [
+//     "The user is reading an article from CNN about the arrest of a suspect in the shootings of three homeless men in Los Angeles, as well as a related shooting at a homeless encampment in Las Vegas. The article provides details on the suspect's arrest and the circumstances of the shootings, as well as the response from Los Angeles city officials and law enforcement.",
+//     'The user is reading an article about the arrest of a suspect in the shootings of three homeless men in Los Angeles, as well as the subsequent investigation and response by law enforcement and city officials.'
+//   ]
+// }
 
-getSuggestedFeedback(userHistories.lposyqon0ceexc6ynetg);
+// const res = getSuggestedFeedback(userHistories.lposyqon0ceexc6ynetg);
 
 module.exports = getSuggestedFeedback;

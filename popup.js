@@ -36,7 +36,7 @@ function sendTextToServerForSummarization(text, sessionId) {
   })
     .then((response) => response.json())
     .then((data) => {
-      document.getElementById("summary").textContent = data.summary;
+      document.getElementById("summary").innerHTML = `<p>${data.summary}</p>`;
     })
     .catch((error) => {
       console.error("Error:", error);

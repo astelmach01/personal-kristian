@@ -73,9 +73,9 @@ app.post("/api/summarize", async (req, res) => {
     userHistories[sessionId] = history;
 
     console.log("Updated userHistories:", userHistories);
-    console.log(getSuggestedFeedback(history));
+    const steps = await getSuggestedFeedback(history);
 
-    res.json({ summary: summary });
+    res.json({ summary: steps });
   } catch (error) {
     console.error("Error occurred:", error);
     res.status(500).send(error.message);

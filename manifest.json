@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Personal Kristian",
+  "name": "Proactive Browser Copilot",
   "version": "1.0",
   "permissions": ["activeTab", "tabs", "storage", "scripting"],
 
