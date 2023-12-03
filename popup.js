@@ -1,7 +1,11 @@
 document.addEventListener("DOMContentLoaded", function () {
+  // Add the event listener to the button
   document
     .getElementById("summarizeButton")
     .addEventListener("click", summarizeCurrentPage);
+
+  // Also run the summarize function immediately when the popup loads
+  summarizeCurrentPage();
 });
 
 function summarizeCurrentPage() {

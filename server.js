@@ -3,6 +3,8 @@ const express = require("express");
 const { OpenAI } = require("openai");
 const cors = require("cors");
 
+const getSuggestedFeedback = require("./index.js");
+
 const app = express();
 app.use(express.json({ limit: "10mb" })); // Make sure to parse JSON request bodies
 app.use(
@@ -31,7 +33,9 @@ app.post("/api/summarize", async (req, res) => {
     const sessionId = req.body.sessionId;
     if (!sessionId) {
       console.log("sessionId is required in the request body.");
-      return res.status(400).json({ error: "sessionId is required in the request body." });
+      return res
+        .status(400)
+        .json({ error: "sessionId is required in the request body." });
     }
 
     const promptText = req.body.content; // Text to summarize
@@ -45,7 +49,8 @@ app.post("/api/summarize", async (req, res) => {
     // Construct the system message
     const systemMessage = {
       role: "system",
-      content: "You are a helpful AI assistant, keeping track of user's browsing history. For each request, summarize what the user is doing in 1-3 sentences, like 'the user is reading about european politics'."
+      content:
+        "You are a helpful AI assistant, keeping track of user's browsing history. For each request, summarize what the user is doing in 1-3 sentences, like 'the user is reading about european politics'.",
     };
 
     // Prepare messages for OpenAI API including the user message and system command
@@ -68,6 +73,7 @@ app.post("/api/summarize", async (req, res) => {
     userHistories[sessionId] = history;
 
     console.log("Updated userHistories:", userHistories);
+    console.log(getSuggestedFeedback(history));
 
     res.json({ summary: summary });
   } catch (error) {
@@ -75,7 +81,6 @@ app.post("/api/summarize", async (req, res) => {
     res.status(500).send(error.message);
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

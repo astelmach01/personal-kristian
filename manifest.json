@@ -3,12 +3,6 @@
   "name": "Personal Kristian",
   "version": "1.0",
   "permissions": ["activeTab", "tabs", "storage", "scripting"],
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["contentScript.js"]
-    }
-  ],
 
   "action": {
     "default_popup": "popup.html"
