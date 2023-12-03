@@ -4,7 +4,7 @@ const { inspect } = require("util");
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
 const objectivePrompt = `I am browsing the web. I may or may not have a broader objective in mind.
-I will provide you with the most recent URLs I have visited and their titles.
+I will provide you with a summary of the user's visited websites.
 Think step-by-step to identify the sentiment and objective of the user.
 When identifying objectives, be as descriptive and specific as possible.
 Even if you have just a hunch, please provide your best guess.`;
@@ -127,136 +127,77 @@ const nextStepsTools = [
   },
 ];
 
-async function queryChat(messages, tools) {
+async function queryChat(messages, tools, toolChoice) {
   try {
-    console.log("Request to OpenAI API with body:", messages);
     const url = "https://api.openai.com/v1/chat/completions";
     const postData = {
-      model: "gpt-4-1106-preview",
+      model: "gpt-3.5-turbo-1106",
       messages,
       temperature: 0.1,
       tools,
+      ...(toolChoice && { tool_choice: toolChoice }),
     };
-    if (tools == nextStepsTools) {
-      postData.tool_choice = {
-        type: "function",
-        function: {
-          name: "next_steps",
-        },
-      };
-    }
-    const config = {
+
+    const { data } = await axios.post(url, postData, {
       headers: {
         Authorization: `Bearer ${OPENAI_KEY}`,
       },
-    };
-
-    console.log("URL:", url);
-    console.log("Data:", inspect(postData, false, null, true));
-    console.log("Config:", config);
-
-    const { data } = await axios.post(url, postData, config);
+    });
 
     return data;
   } catch (err) {
-    console.error(err.response.data);
+    console.error(err.response ? err.response.data : err);
     throw new Error("Error querying OpenAI");
   }
 }
 
-async function findObjectives(messages) {
-  return queryChat(messages, objectiveTools);
+async function getSuggestedFeedback(history) {
+  const response = await queryChat(
+    [
+      { role: "system", content: objectivePrompt },
+      {
+        role: "user",
+        content:
+          history.slice(0, -1).join("\n") + "\n" + history[history.length - 1],
+      },
+    ],
+    objectiveTools
+  );
+
+  const objectives = response.choices[0].message.tool_calls
+    .filter((tc) => tc.function.name === "register_objectives")
+    .flatMap((tc) => JSON.parse(tc.function.arguments).objectives);
+
+  if (!objectives.length) return "No clear objectives identified.";
+
+  const nextStepsResponse = await queryChat(
+    [
+      { role: "system", content: nextStepsPrompt },
+      { role: "user", content: formatObjectives(objectives) },
+    ],
+    nextStepsTools,
+    { type: "function", function: { name: "next_steps" } }
+  );
+
+  const steps = JSON.parse(
+    nextStepsResponse.choices[0].message.tool_calls[0].function.arguments
+  ).steps;
+  return formatSteps(steps);
 }
 
-function extractTitle(html) {
-  const titleRegex = /<title>(.*?)<\/title>/i;
-  const match = titleRegex.exec(html);
-  return match ? match[1] : null;
-}
-
-async function queryUrls(history, current) {
-  const response = await findObjectives([
-    {
-      role: "system",
-      content: objectivePrompt,
-    },
-    {
-      role: "user",
-      content: history + "\n" + current,
-    },
-  ]);
-  return response.choices[0];
-}
-
-async function identifyNextSteps(objectives) {
-  const serializedObjectives = objectives
+function formatObjectives(objectives) {
+  return objectives
     .map(
       (obj) =>
         `Sentiment: ${obj.sentiment}\nShort-term objective: ${obj.shortTermObjective}\nLong-term objective: ${obj.longTermObjective}\nReason: ${obj.reason}`
     )
     .join("\n\n");
-  const response = await queryChat(
-    [
-      {
-        role: "system",
-        content: nextStepsPrompt,
-      },
-      {
-        role: "user",
-        content: serializedObjectives,
-      },
-    ],
-    nextStepsTools
-  );
-  return response.choices[0];
 }
 
-async function getSuggestedFeedback(history) {
-  const response = await queryUrls(
-    history.slice(0, history.length - 1),
-    history[history.length - 1]
-  );
-  const { tool_calls } = response.message;
-  const objectives = [];
-  for (const toolCall of tool_calls) {
-    const json = JSON.parse(toolCall.function.arguments);
-    if (toolCall.function.name === "register_objectives") {
-      const analysis = json;
-      objectives.push(...analysis.objectives);
-    } else {
-      const analysis = json;
-      console.log(analysis);
-    }
-  }
-
-  const nextStepsResponse = await identifyNextSteps(objectives);
-  const toolCall = nextStepsResponse.message.tool_calls[0];
-  const json = JSON.parse(toolCall.function.arguments);
-  const analysis = json;
-  // print only the "steps" property of the analysis
-  console.log("Original analysis:", analysis);
-
-  const steps = [];
-  for (const step of analysis.steps) {
-    console.log("Step:", step.step);
-    steps.push(step.step);
-  }
-  console.log("Suggested feedback:", steps);
-  // return a string in number bullet pointed
+function formatSteps(steps) {
   return steps
-    .map((step, index) => `${index + 1}. ${step}`)
-    .join(" <br> <br> ");
+    .map((step, index) => `${index + 1}. ${step.step}`)
+    .join("<br><br>");
 }
-
-module.exports = getSuggestedFeedback;
-
-// const userHistories =  {
-//   lposyqon0ceexc6ynetg: [
-//     "The user is reading an article from CNN about the arrest of a suspect in the shootings of three homeless men in Los Angeles, as well as a related shooting at a homeless encampment in Las Vegas. The article provides details on the suspect's arrest and the circumstances of the shootings, as well as the response from Los Angeles city officials and law enforcement.",
-//     'The user is reading an article about the arrest of a suspect in the shootings of three homeless men in Los Angeles, as well as the subsequent investigation and response by law enforcement and city officials.'
-//   ]
-// }
-
-// const res = getSuggestedFeedback(userHistories.lposyqon0ceexc6ynetg);
 
 module.exports = getSuggestedFeedback;
