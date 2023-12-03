@@ -24,3 +24,38 @@ document.getElementById("testButton").addEventListener("click", () => {
       );
     });
 });
+
+
+// Add this to popup.js
+document.getElementById('summarizeButton').addEventListener('click', function() {
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    chrome.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      function: summarizePageContent
+    }, (injectionResults) => {
+      for (const frameResult of injectionResults)
+        sendTextToServerForSummarization(frameResult.result);
+    });
+  });
+});
+
+function sendTextToServerForSummarization(text) {
+  fetch('http://localhost:3000/api/summarize', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ content: text }),
+  })
+  .then(response => response.json())
+  .then(data => {
+    document.getElementById('summary').textContent = data.summary;
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });
+}
+
+function summarizePageContent() {
+  return document.body.innerText; // This will be the result passed to the injectionResults
+}

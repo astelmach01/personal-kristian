@@ -1,8 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "OpenAI API Extension",
+  "name": "Personal Kristian",
   "version": "1.0",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "tabs", "storage", "scripting"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"]
+    }
+  ],
+
   "action": {
     "default_popup": "popup.html"
   },
