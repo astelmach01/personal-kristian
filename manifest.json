@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "OpenAI API Extension",
+  "version": "1.0",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
