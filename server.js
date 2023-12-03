@@ -1,5 +1,4 @@
 require("dotenv").config();
-
 const express = require("express");
 const { OpenAI } = require("openai");
 const cors = require("cors");
@@ -12,7 +11,11 @@ app.use(
   })
 );
 
-const openai = new OpenAI(process.env.OPENAI_API_KEY, ); // Load your OpenAI API key from environment variables
+const openai = new OpenAI(process.env.OPENAI_API_KEY); // Load your OpenAI API key from environment variables
+
+// In-memory store for user history
+// Structure: { sessionId: [message, ...], ... }
+const userHistories = {};
 
 // Middleware to log the request
 app.use((req, res, next) => {
@@ -21,32 +24,32 @@ app.use((req, res, next) => {
   next(); // Pass the request to the next middleware/handler
 });
 
-// Endpoint to handle OpenAI requests
-app.post("/api/openai", async (req, res) => {
-  try {
-    console.log("Request to OpenAI API with body:", req.body);
-    const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo-1106",
-      messages: req.body.messages,
-    });
-    console.log("OpenAI response:", chatCompletion);
-    res.json(chatCompletion);
-  } catch (error) {
-    console.error("Error occurred:", error);
-    res.status(500).send(error.message);
-  }
-});
-
-// Add this to server.js
+// Endpoint to handle summarization requests with history tracking
+// Endpoint to handle summarization requests with history tracking
 app.post("/api/summarize", async (req, res) => {
   try {
-    const promptText = req.body.content; // Assume the text to summarize is under the 'content' key
+    const sessionId = req.body.sessionId;
+    if (!sessionId) {
+      console.log("sessionId is required in the request body.");
+      return res.status(400).json({ error: "sessionId is required in the request body." });
+    }
 
-    // Construct the messages array with a system command to summarize
-    const messages = [
-      { role: "system", content: "Please summarize the following text:" },
-      { role: "user", content: promptText },
-    ];
+    const promptText = req.body.content; // Text to summarize
+
+    // Retrieve or initialize history for the session
+    const history = userHistories[sessionId] || [];
+
+    // Construct the message for summarization
+    const userMessage = { role: "user", content: promptText };
+
+    // Construct the system message
+    const systemMessage = {
+      role: "system",
+      content: "You are a helpful AI assistant, keeping track of user's browsing history. For each request, summarize what the user is doing in 1-3 sentences, like 'the user is reading about european politics'."
+    };
+
+    // Prepare messages for OpenAI API including the user message and system command
+    const messages = [userMessage, systemMessage];
 
     console.log("Request to OpenAI API with body:", req.body);
 
@@ -55,12 +58,16 @@ app.post("/api/summarize", async (req, res) => {
       messages: messages,
     });
 
-      console.log("OpenAI response:", chatCompletion);
-      console.log("choices:", chatCompletion.choices);
+    console.log("OpenAI response:", chatCompletion);
 
-    // Respond with the summary from the last message
     // Assuming the last message in the completion is the summary
     const summary = chatCompletion.choices[0].message.content;
+
+    // Append only the user interaction (not the system message) to the history
+    history.push(summary);
+    userHistories[sessionId] = history;
+
+    console.log("Updated userHistories:", userHistories);
 
     res.json({ summary: summary });
   } catch (error) {
@@ -68,7 +75,6 @@ app.post("/api/summarize", async (req, res) => {
     res.status(500).send(error.message);
   }
 });
-
 
 
 const PORT = process.env.PORT || 3000;

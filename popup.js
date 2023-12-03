@@ -1,61 +1,60 @@
-document.getElementById("testButton").addEventListener("click", () => {
-  const userMessage = { role: "user", content: "Say this is a test" }; // Replace with user input if needed
-  fetch("http://localhost:3000/api/openai", {
+document.addEventListener("DOMContentLoaded", function () {
+  document
+    .getElementById("summarizeButton")
+    .addEventListener("click", summarizeCurrentPage);
+});
+
+function summarizeCurrentPage() {
+  getSessionId().then((sessionId) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: tabs[0].id },
+          function: summarizePageContent,
+        },
+        (injectionResults) => {
+          for (const frameResult of injectionResults) {
+            sendTextToServerForSummarization(frameResult.result, sessionId);
+          }
+        }
+      );
+    });
+  });
+}
+
+function sendTextToServerForSummarization(text, sessionId) {
+  fetch("http://localhost:3000/api/summarize", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ messages: [userMessage] }),
+    body: JSON.stringify({ content: text, sessionId: sessionId }),
   })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Network response was not ok " + response.statusText);
-      }
-      return response.json();
-    })
+    .then((response) => response.json())
     .then((data) => {
-      document.getElementById("response").textContent =
-        data.choices[0].message.content;
+      document.getElementById("summary").textContent = data.summary;
     })
     .catch((error) => {
-      console.error(
-        "There has been a problem with your fetch operation:",
-        error
-      );
+      console.error("Error:", error);
     });
-});
-
-
-// Add this to popup.js
-document.getElementById('summarizeButton').addEventListener('click', function() {
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      function: summarizePageContent
-    }, (injectionResults) => {
-      for (const frameResult of injectionResults)
-        sendTextToServerForSummarization(frameResult.result);
-    });
-  });
-});
-
-function sendTextToServerForSummarization(text) {
-  fetch('http://localhost:3000/api/summarize', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ content: text }),
-  })
-  .then(response => response.json())
-  .then(data => {
-    document.getElementById('summary').textContent = data.summary;
-  })
-  .catch(error => {
-    console.error('Error:', error);
-  });
 }
 
 function summarizePageContent() {
   return document.body.innerText; // This will be the result passed to the injectionResults
+}
+
+function getSessionId() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(["sessionId"], function (result) {
+      if (result.sessionId) {
+        resolve(result.sessionId);
+      } else {
+        const newSessionId =
+          Date.now().toString(36) + Math.random().toString(36).substr(2);
+        chrome.storage.local.set({ sessionId: newSessionId }, () => {
+          resolve(newSessionId);
+        });
+      }
+    });
+  });
 }
